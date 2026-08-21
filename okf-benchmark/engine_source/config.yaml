@@ -1,0 +1,55 @@
+# Project configuration for Legal Case Matching Pipeline (Scoped to 2021-2026)
+
+# Explicit Year Scope Constraint
+year_range:
+  - 2021
+  - 2026
+
+# Local Data Paths
+data_paths:
+  base_dir: "indian-sc-data"
+  raw_data_dir: "indian-sc-data/data"
+  metadata_dir: "indian-sc-data/metadata"
+  canonical_output: "reports/canonical_cases_2021_2026.parquet"
+  triage_report: "reports/triage_report.md"
+  synthetic_testset: "reports/synthetic_testset.json"
+  evaluation_report: "reports/evaluation_report.md"
+  match_log: "reports/match_log.jsonl"
+
+# Triage & Extraction Parameters
+triage:
+  sample_size: 180
+  min_text_length_chars: 100
+
+# Exact Matching Parameters
+exact_match:
+  enabled: true
+
+# Fuzzy Matching Parameters
+fuzzy_match:
+  case_number_threshold: 90
+  party_name_token_set_threshold: 85
+  combined_case_threshold: 85
+
+# Semantic Matching Parameters
+semantic_match:
+  model_name: "all-MiniLM-L6-v2"  # Fast, lightweight & stable embedding model
+  max_text_chars: 1500            # Legacy: headnote/facts snippet (kept for rollback)
+  top_k: 5
+  similarity_threshold: 0.75
+  # Hybrid retrieval weights (Step 3 — Pattern B fix).
+  hybrid:
+    enabled: true
+    dense_weight: 0.7   # Weight for dense (embedding) similarity score
+    sparse_weight: 0.3  # Weight for sparse (BM25) score
+
+# Chunked Embedding Parameters (Step 1 — Pattern B fix)
+chunking:
+  opening_chars: 800    # Head of document (parties, procedural frame)
+  body_chars: 1800      # Middle segment taken from ~25%-60% mark (facts, arguments)
+  holding_chars: 800    # Tail of document (order/holding/disposition)
+
+# Synthetic Test Generation Parameters
+synthetic:
+  sample_size: 0
+  variants_per_case: 3

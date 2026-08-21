@@ -1,0 +1,22 @@
+# Backend dependencies for the PDF OCR Pipeline
+# Install with: pip install -r requirements.txt
+
+# Core web framework
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+
+# PDF processing
+PyMuPDF==1.25.1
+
+# HTTP request parsing / file upload (required by FastAPI)
+python-multipart==0.0.20
+
+# OpenOCR toolkit (handles text detection + recognition via ONNX)
+# Models are auto-downloaded on first use (~50–200 MB depending on mode)
+openocr-python==0.1.5
+
+# Environment variable loading
+python-dotenv==1.0.1
+
+# Type checking helpers (stdlib in Python 3.11+, backport for older versions)
+typing_extensions>=4.5.0

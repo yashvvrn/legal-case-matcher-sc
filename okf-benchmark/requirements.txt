@@ -1,0 +1,4 @@
+pyyaml
+python-frontmatter
+rapidfuzz
+scipy

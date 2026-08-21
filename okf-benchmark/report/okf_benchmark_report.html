@@ -1,0 +1,48 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>OKF Routing Benchmark Report</title>
+<style>
+body { font-family: Georgia, serif; max-width: 900px; margin: 2rem auto; color: #1a1a1a; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; font-size: 14px; }
+th { background: #f3f3f3; }
+h1, h2 { border-bottom: 2px solid #333; padding-bottom: 4px; }
+.gate-pass { color: #16a34a; font-weight: bold; }
+.gate-fail { color: #dc2626; font-weight: bold; }
+</style></head>
+<body>
+<h1>OKF Matter-Pool Routing Benchmark</h1>
+<p>Three-arm comparison: SQLite control (A1) vs OKF format-parity (A2) vs OKF + multi-signal (A3).</p>
+
+<h2>1. Executive Summary</h2>
+<table><tr><th>Arm</th><th>Overall Accuracy</th><th>Harmful Errors</th><th>Invariant Violations</th><th>P50 Latency</th></tr>
+<tr><td>A1</td><td>98.0%</td><td>1</td><td>0</td><td>102.1 ms</td></tr><tr><td>A2</td><td>98.0%</td><td>1</td><td>0</td><td>118.5 ms</td></tr><tr><td>A3</td><td>99.3%</td><td>1</td><td>0</td><td>237.7 ms</td></tr>
+</table>
+
+<h2>2. Per-Difficulty Results</h2>
+<h3>Easy</h3><table><tr><th>Metric</th><th>A1</th><th>A2</th><th>A3</th></tr><tr><td>matter_accuracy</td><td>100.0%</td><td>100.0%</td><td>100.0%</td></tr><tr><td>autofile_precision</td><td>100.0%</td><td>100.0%</td><td>100.0%</td></tr><tr><td>autofile_recall</td><td>100.0%</td><td>100.0%</td><td>100.0%</td></tr><tr><td>review_rate</td><td>0.0%</td><td>0.0%</td><td>0.0%</td></tr><tr><td>harmful_error_count</td><td>0</td><td>0</td><td>0</td></tr><tr><td>p50_route_ms</td><td>0.4 ms</td><td>0.4 ms</td><td>0.0 ms</td></tr><tr><td>p90_route_ms</td><td>0.6 ms</td><td>0.8 ms</td><td>0.1 ms</td></tr></table>
+<h3>Medium</h3><table><tr><th>Metric</th><th>A1</th><th>A2</th><th>A3</th></tr><tr><td>matter_accuracy</td><td>98.3%</td><td>98.3%</td><td>98.3%</td></tr><tr><td>autofile_precision</td><td>98.3%</td><td>98.3%</td><td>98.3%</td></tr><tr><td>autofile_recall</td><td>98.3%</td><td>98.3%</td><td>96.7%</td></tr><tr><td>review_rate</td><td>0.0%</td><td>0.0%</td><td>1.7%</td></tr><tr><td>harmful_error_count</td><td>1</td><td>1</td><td>1</td></tr><tr><td>p50_route_ms</td><td>140.9 ms</td><td>158.3 ms</td><td>297.7 ms</td></tr><tr><td>p90_route_ms</td><td>156.5 ms</td><td>166.5 ms</td><td>371.8 ms</td></tr></table>
+<h3>Hard</h3><table><tr><th>Metric</th><th>A1</th><th>A2</th><th>A3</th></tr><tr><td>matter_accuracy</td><td>93.3%</td><td>93.3%</td><td>100.0%</td></tr><tr><td>autofile_precision</td><td>100.0%</td><td>100.0%</td><td>100.0%</td></tr><tr><td>autofile_recall</td><td>93.3%</td><td>93.3%</td><td>76.7%</td></tr><tr><td>review_rate</td><td>6.7%</td><td>6.7%</td><td>23.3%</td></tr><tr><td>harmful_error_count</td><td>0</td><td>0</td><td>0</td></tr><tr><td>p50_route_ms</td><td>139.2 ms</td><td>158.3 ms</td><td>292.4 ms</td></tr><tr><td>p90_route_ms</td><td>160.9 ms</td><td>169.8 ms</td><td>377.2 ms</td></tr></table>
+
+<h2>3. Paired Significance (McNemar)</h2>
+<h3>Arm 1 vs Arm 2</h3><table><tr><th>Stage</th><th>Both</th><th>Only A</th><th>Only B</th><th>Neither</th><th>p</th><th>Result</th></tr><tr><td>overall</td><td>147</td><td>0</td><td>0</td><td>3</td><td>1.000</td><td>not significant (n=0, p=1.000)</td></tr><tr><td>easy</td><td>60</td><td>0</td><td>0</td><td>0</td><td>1.000</td><td>not significant (n=0, p=1.000)</td></tr><tr><td>medium</td><td>59</td><td>0</td><td>0</td><td>1</td><td>1.000</td><td>not significant (n=0, p=1.000)</td></tr><tr><td>hard</td><td>28</td><td>0</td><td>0</td><td>2</td><td>1.000</td><td>not significant (n=0, p=1.000)</td></tr></table><h3>Arm 1 vs Arm 3</h3><table><tr><th>Stage</th><th>Both</th><th>Only A</th><th>Only B</th><th>Neither</th><th>p</th><th>Result</th></tr><tr><td>overall</td><td>147</td><td>0</td><td>2</td><td>1</td><td>0.500</td><td>not significant (n=2, p=0.500)</td></tr><tr><td>easy</td><td>60</td><td>0</td><td>0</td><td>0</td><td>1.000</td><td>not significant (n=0, p=1.000)</td></tr><tr><td>medium</td><td>59</td><td>0</td><td>0</td><td>1</td><td>1.000</td><td>not significant (n=0, p=1.000)</td></tr><tr><td>hard</td><td>28</td><td>0</td><td>2</td><td>0</td><td>0.500</td><td>not significant (n=2, p=0.500)</td></tr></table><h3>Arm 2 vs Arm 3</h3><table><tr><th>Stage</th><th>Both</th><th>Only A</th><th>Only B</th><th>Neither</th><th>p</th><th>Result</th></tr><tr><td>overall</td><td>147</td><td>0</td><td>2</td><td>1</td><td>0.500</td><td>not significant (n=2, p=0.500)</td></tr><tr><td>easy</td><td>60</td><td>0</td><td>0</td><td>0</td><td>1.000</td><td>not significant (n=0, p=1.000)</td></tr><tr><td>medium</td><td>59</td><td>0</td><td>0</td><td>1</td><td>1.000</td><td>not significant (n=0, p=1.000)</td></tr><tr><td>hard</td><td>28</td><td>0</td><td>2</td><td>0</td><td>0.500</td><td>not significant (n=2, p=0.500)</td></tr></table>
+
+<h2>4. Safety</h2>
+<table><tr><th>Arm</th><th>Autofile Precision</th><th>Harmful Errors</th><th>Stage D Gate</th></tr>
+<tr><td>A1</td><td>99.3%</td><td>1</td><td class='gate-pass'>PASS</td></tr><tr><td>A2</td><td>99.3%</td><td>1</td><td class='gate-pass'>PASS</td></tr><tr><td>A3</td><td>99.3%</td><td>1</td><td class='gate-pass'>PASS</td></tr>
+</table>
+
+<h2>5. Calibration (Stage C)</h2>
+<p>Orange bars mark the 0.75&ndash;0.82 confidence band that produced the baseline's failures.</p>
+<h4>Arm 1</h4><svg width='480' height='160' xmlns='http://www.w3.org/2000/svg'><rect x='0.0' y='140.0' width='54.9' height='0.0' fill='#2563eb' /><text x='0.0' y='155' font-size='9'>0.00</text><rect x='68.6' y='0.0' width='54.9' height='140.0' fill='#d97706' /><text x='68.6' y='155' font-size='9'>0.75</text><rect x='137.1' y='0.0' width='54.9' height='140.0' fill='#d97706' /><text x='137.1' y='155' font-size='9'>0.80</text><rect x='205.7' y='0.0' width='54.9' height='140.0' fill='#2563eb' /><text x='205.7' y='155' font-size='9'>0.85</text><rect x='274.3' y='0.0' width='54.9' height='140.0' fill='#2563eb' /><text x='274.3' y='155' font-size='9'>0.90</text><rect x='342.9' y='70.0' width='54.9' height='70.0' fill='#2563eb' /><text x='342.9' y='155' font-size='9'>0.95</text><rect x='411.4' y='0.0' width='54.9' height='140.0' fill='#2563eb' /><text x='411.4' y='155' font-size='9'>1.00</text></svg><h4>Arm 2</h4><svg width='480' height='160' xmlns='http://www.w3.org/2000/svg'><rect x='0.0' y='140.0' width='54.9' height='0.0' fill='#2563eb' /><text x='0.0' y='155' font-size='9'>0.00</text><rect x='68.6' y='0.0' width='54.9' height='140.0' fill='#d97706' /><text x='68.6' y='155' font-size='9'>0.75</text><rect x='137.1' y='0.0' width='54.9' height='140.0' fill='#d97706' /><text x='137.1' y='155' font-size='9'>0.80</text><rect x='205.7' y='0.0' width='54.9' height='140.0' fill='#2563eb' /><text x='205.7' y='155' font-size='9'>0.85</text><rect x='274.3' y='0.0' width='54.9' height='140.0' fill='#2563eb' /><text x='274.3' y='155' font-size='9'>0.90</text><rect x='342.9' y='70.0' width='54.9' height='70.0' fill='#2563eb' /><text x='342.9' y='155' font-size='9'>0.95</text><rect x='411.4' y='0.0' width='54.9' height='140.0' fill='#2563eb' /><text x='411.4' y='155' font-size='9'>1.00</text></svg><h4>Arm 3</h4><svg width='480' height='160' xmlns='http://www.w3.org/2000/svg'><rect x='0.0' y='0.0' width='48.0' height='140.0' fill='#2563eb' /><text x='0.0' y='155' font-size='9'>0.65</text><rect x='60.0' y='0.0' width='48.0' height='140.0' fill='#2563eb' /><text x='60.0' y='155' font-size='9'>0.70</text><rect x='120.0' y='0.0' width='48.0' height='140.0' fill='#d97706' /><text x='120.0' y='155' font-size='9'>0.75</text><rect x='180.0' y='0.0' width='48.0' height='140.0' fill='#d97706' /><text x='180.0' y='155' font-size='9'>0.80</text><rect x='240.0' y='0.0' width='48.0' height='140.0' fill='#2563eb' /><text x='240.0' y='155' font-size='9'>0.85</text><rect x='300.0' y='0.0' width='48.0' height='140.0' fill='#2563eb' /><text x='300.0' y='155' font-size='9'>0.90</text><rect x='360.0' y='11.7' width='48.0' height='128.3' fill='#2563eb' /><text x='360.0' y='155' font-size='9'>0.95</text><rect x='420.0' y='0.0' width='48.0' height='140.0' fill='#2563eb' /><text x='420.0' y='155' font-size='9'>1.00</text></svg>
+
+<h2>6. Limitations</h2>
+<ul>
+<li>Sample size and statistical power per §1.4 of the test guide — treat non-significant deltas as directional only.</li>
+<li>Field-density gap: InLegalNER judgments are richer than real CaseDesk matter records typed by an advocate at intake.</li>
+<li>Cross-links in the OKF bundle are rule-generated (party-name / court+statute+date proximity), not expert-curated.</li>
+</ul>
+
+<h2>7. Conclusion</h2>
+<p>Compare A2 to A1 first: if they are not statistically equivalent, the experiment has a parity leak and A3's numbers should not be trusted. If A2 ≈ A1, any A3 delta above is attributable to the multi-signal §9 features, not to OKF as a format.</p>
+
+</body></html>

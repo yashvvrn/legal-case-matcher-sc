@@ -1,0 +1,31 @@
+# Virtual environments
+venv/
+.venv/
+*/venv/
+env/
+
+# Raw dataset & large test benchmarks
+indian-sc-data/
+okf-benchmark/engine_source/reports/demo_test_pdfs/
+okf-benchmark/engine_source/reports/demo_test_documents/
+okf-benchmark/engine_source/reports/match_log.jsonl
+okf-benchmark/engine_source/reports/synthetic_testset.json
+Document_Summary_stemple/2022/
+Document_Summary_stemple/data/
+*.tar
+*.tar.gz
+
+# Temporary, build & cache artifacts
+__pycache__/
+*.pyc
+.DS_Store
+*.log
+/tmp/
+.streamlit/
+hf_space_staging/
+hf_static_space/
+
+# Node modules
+node_modules/
+dist/
+build/
