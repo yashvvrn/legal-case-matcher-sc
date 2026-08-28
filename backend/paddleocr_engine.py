@@ -43,6 +43,11 @@ class PaddleOCREngine:
                 self._available = False
         return self._available
 
+    def extract_text(self, image_path: str) -> str:
+        """Extract text from image path using PaddleOCR / RapidOCR."""
+        res = self.process_page(image_path, page_number=1)
+        return res.text if res and res.text else ""
+
     def process_page(self, image_path: str, page_number: int) -> OCRPageResult:
         """
         Process a single page image through PaddleOCR.

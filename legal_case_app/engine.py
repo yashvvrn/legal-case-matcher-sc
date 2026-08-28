@@ -250,8 +250,7 @@ def create_langgraph_pipeline(engine: PipelineEngine):
                         pix = doc[0].get_pixmap(dpi=200)
                         tmp_img = f"/tmp/langgraph_ocr_{os.getpid()}.png"
                         pix.save(tmp_img)
-                        ocr_res = engine.ocr_engine.extract_text(tmp_img)
-                        extracted_text = ocr_res.get("text", "")
+                        extracted_text = engine.ocr_engine.extract_text(tmp_img)
                         doc.close()
                         if os.path.exists(tmp_img): os.remove(tmp_img)
                     except Exception as e:

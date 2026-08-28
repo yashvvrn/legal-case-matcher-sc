@@ -254,18 +254,19 @@ with tab_match:
             st.caption("⚡ Summary generated via Gemma 3 1B (Ollama Legal Post-Processor)")
             
             c_down1, c_down2 = st.columns(2)
+            doc_cnr = (rec.get('cnr') or 'summary') if rec else 'summary'
             with c_down1:
                 st.download_button(
                     "📥 Download Summary (.md)",
                     data=res_state.get("summary", ""),
-                    file_name=f"{rec.get('cnr') or 'summary'}.md",
+                    file_name=f"{doc_cnr}.md",
                     mime="text/markdown"
                 )
             with c_down2:
                 st.download_button(
                     "📄 Download Summary (.txt)",
                     data=res_state.get("summary", ""),
-                    file_name=f"{rec.get('cnr') or 'summary'}.txt",
+                    file_name=f"{doc_cnr}.txt",
                     mime="text/plain"
                 )
 
