@@ -23,7 +23,7 @@ ENGINE_SOURCE_DIR = os.path.join(CURRENT_DIR, "engine_source")
 if ENGINE_SOURCE_DIR not in sys.path:
     sys.path.insert(0, ENGINE_SOURCE_DIR)
 
-_CNR_RE = re.compile(r'\bESCR\d{12}\b')
+_CNR_RE = re.compile(r'\b(?:ESCR|[A-Z]{4,7})\d{10,12}\b', re.IGNORECASE)
 _NC_RE  = re.compile(r'\b(\d{4})\s*INSC\s*(\d+)\b', re.IGNORECASE)
 _YEAR_RE = re.compile(r'\b(20[12]\d)\b')
 
