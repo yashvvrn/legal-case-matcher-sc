@@ -8,7 +8,7 @@
 
 The **Indian Supreme Court Legal Case Matcher & Dynamic Custom Case Platform** is an enterprise-grade, hybrid air-gapped legal intelligence system designed to ingest, process, match, and synthesize Indian Supreme Court decisions (1950–Present, spanning **12,688+ canonical judgments**) alongside user-created custom litigation records.
 
-The platform is strictly engineered to comply with **Google Open Knowledge Framework (Google OKF) Legal Benchmark Standards** for high-precision entity resolution, deterministic legal citation recovery, and sub-50ms latency budgets.
+The platform is strictly engineered to comply with **Google Open Knowledge Framework (Google OKF) Legal Benchmark Standards** (`okf-benchmark/`) for high-precision entity resolution, deterministic legal citation recovery, and sub-50ms latency budgets.
 
 The architecture is built around an **Agentic LangGraph StateGraph** backed by a fault-tolerant multi-tiered search cascade, high-accuracy multi-engine OCR with **Mistral AI Low-Confidence Fallback**, 2-pass character confusion repair, on-the-fly vector re-indexing, and local LLM-driven structured legal synthesis.
 
@@ -49,7 +49,7 @@ The engine is built in direct alignment with the **Google OKF (Open Knowledge Fr
 
 ---
 
-## 3. End-to-End System Architecture
+## 3. End-to-End System Architecture (with Google OKF Integration)
 
 ```mermaid
 flowchart TD
@@ -78,7 +78,7 @@ flowchart TD
         Mistral_Node --> Scoped_Repair
     end
 
-    subgraph Layer_LangGraph ["3. Agentic LangGraph StateGraph Core (Google OKF Cascade)"]
+    subgraph Layer_LangGraph ["3. Agentic LangGraph StateGraph Core"]
         direction TB
         Node_OCR["Node 1: OCR & Text Extraction State"]
         Node_Exact["Node 2: Exact Matcher\n(Normalized CNR & NC Hash Index)"]
@@ -99,15 +99,25 @@ flowchart TD
         Node_Semantic --> Node_Summary
     end
 
-    subgraph Layer_Data ["4. Data & Index Storage Subsystem"]
-        MasterParquet[("Master Canonical Dataset\ncanonical_cases_2021_2026.parquet\n(12,688 Records, 2010–2025)")]
+    subgraph Layer_OKF_Benchmark ["4. Google OKF (Open Knowledge Framework) Reference Layer"]
+        OKF_Standard["Google OKF Benchmark Evaluation Protocol\n(Zero-Hallucination & < 50ms Latency Budget)"]
+        OKF_GroundTruth["OKF Canonical Ground-Truth Store\n(canonical_cases_2021_2026.parquet)"]
+        OKF_Harness["OKF 150-Doc Multi-Year Evaluation Harness\n(run_150_doc_benchmark.py)"]
+        
+        OKF_Standard -.->|"Enforces Standards & Latency Ceilings"| Layer_LangGraph
+        OKF_Harness -.->|"Validates 4 Query Signal Tiers"| Layer_LangGraph
+        OKF_GroundTruth --> MasterParquet
+    end
+
+    subgraph Layer_Data ["5. Data & Index Storage Subsystem"]
+        MasterParquet[("Master Canonical Dataset\n(12,688 Records, 2010–2025)")]
         CustomParquet[("Custom Cases Store\ncustom_cases.parquet")]
         FAISS_Store[("FAISS Dense Vector Index\n(38,064 Chunk Vectors, 384-d)")]
         BM25_Store[("BM25 Okapi Sparse Term Matrix")]
         AWS_S3_Store[("AWS S3 Open Data Registry\ns3://indian-supreme-court-judgments/")]
     end
 
-    subgraph Layer_Local_LLM ["5. Local Inference Service (Air-Gapped)"]
+    subgraph Layer_Local_LLM ["6. Local Inference Service (Air-Gapped)"]
         OllamaDaemon["Ollama Service Daemon (Port 11434)"]
         GemmaModel["gemma3:1b Local Weights"]
         OllamaDaemon --> GemmaModel
@@ -171,7 +181,7 @@ flowchart TD
         MistralAPI --> MistralFormatter
     end
 
-    subgraph Post_Processing ["2-Pass Post-Processor & Scoped Disambiguation"]
+    subgraph Post_Processing ["2-Pass Post-Processor & Scoped Disambiguation (OKF Bridge)"]
         Pass1{"Pass 1: Strict Regex\nFound CNR / Neutral Citation?"}
         Pass2["Pass 2: Scoped Character Confusion Repair\nApply O->0, I/l->1, S->5, B->8 to Candidate Tokens"]
         NormalizedOutput["Normalized Text & Structured Query Record\n(3 Layers: raw_text, geometry_text, final_text)"]
@@ -185,7 +195,10 @@ flowchart TD
         Pass2 --> NormalizedOutput
     end
 
-    NormalizedOutput --> LangGraphEntry["LangGraph StateGraph: node_ocr_extract"]
+    subgraph Google_OKF_Matching ["Google OKF 3-Tier Match Cascade (okf-benchmark)"]
+        NormalizedOutput --> LangGraphEntry["LangGraph StateGraph: node_ocr_extract"]
+        LangGraphEntry --> OKF_Cascade["3-Tier Cascade:\nExact (1.00) -> Fuzzy (0.70) -> Semantic (0.75)"]
+    end
 ```
 
 ---
@@ -210,7 +223,7 @@ flowchart TD
   - Mistral AI performs deep multimodal contextual recognition, resolving handwritten notes, damaged carbon copies, legal stamps, and tabular headnotes.
   - Reconstructs clean, formatted Markdown output for downstream matching.
 
-#### 3. 2-Pass Scoped Character-Confusion Recovery Engine
+#### 3. 2-Pass Scoped Character-Confusion Recovery Engine (OKF Bridge)
 - **Pass 1 (Strict Extraction)**:
   - Regex scan: `\b(?:ESCR|[A-Z]{4,7})\d{10,12}\b` (CNR) and `\b(\d{4})\s*INSC\s*(\d+)\b` (Neutral Citation).
 - **Pass 2 (Scoped Disambiguation)**:
@@ -257,7 +270,7 @@ flowchart TD
   - Exact match found $\rightarrow$ skips fuzzy and semantic nodes, jumping directly to summarization (latency $< 2\text{ ms}$).
   - High-confidence fuzzy match found ($\ge 0.70$) $\rightarrow$ skips semantic vector search (latency $< 20\text{ ms}$).
 
-### 5.3. 3-Tier Match Cascade Details
+### 5.3. 3-Tier Match Cascade Details (Google OKF Benchmark)
 
 ```
 [ Query Record ]
