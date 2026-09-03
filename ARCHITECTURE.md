@@ -5,9 +5,9 @@
 
 ## 1. Executive Summary & System Mission
 
-The **Indian Supreme Court Legal Case Matcher & Dynamic Custom Case Platform** is an enterprise-grade, air-gapped legal intelligence system designed to ingest, process, match, and synthesize Indian Supreme Court decisions (1950–Present, spanning **12,688+ canonical judgments**) alongside user-created custom litigation records.
+The **Indian Supreme Court Legal Case Matcher & Dynamic Custom Case Platform** is an enterprise-grade, hybrid air-gapped legal intelligence system designed to ingest, process, match, and synthesize Indian Supreme Court decisions (1950–Present, spanning **12,688+ canonical judgments**) alongside user-created custom litigation records.
 
-The platform is engineered around an **Agentic LangGraph StateGraph** architecture backed by a fault-tolerant multi-tiered search cascade, high-accuracy OCR with 2-pass character repair, on-the-fly vector re-indexing, and local LLM-driven structured legal synthesis.
+The platform is engineered around an **Agentic LangGraph StateGraph** architecture backed by a fault-tolerant multi-tiered search cascade, high-accuracy multi-engine OCR with **Mistral AI Low-Confidence Fallback**, 2-pass character repair, on-the-fly vector re-indexing, and local LLM-driven structured legal synthesis.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -15,11 +15,13 @@ The platform is engineered around an **Agentic LangGraph StateGraph** architectu
 ├─────────────────────────────────────────────────────────────────────────────────────────┤
 │ • Canonical Corpus: 12,688+ Supreme Court judgments (2010–2025) via AWS S3 Open Data.   │
 │ • StateGraph Agentic Workflow: Deterministic state machine with dynamic node routing.   │
+│ • Intelligent Multi-Tier OCR: PaddleOCR (ONNX) with automated Mistral AI OCR Fallback   │
+│   for degraded / low-confidence documents (< 0.60 confidence score).                   │
+│ • 2-Pass OCR Recovery: Scoped disambiguation repairing OCR character corruptions.       │
 │ • 3-Tier Match Cascade: Sub-millisecond exact lookup → Fuzzy token match → Dense/Sparse │
 │   hybrid semantic search (FAISS + BM25).                                                │
-│ • 2-Pass OCR Recovery: Scoped disambiguation repairing OCR character corruptions.      │
 │ • Dynamic In-Memory Indexer: Instant live indexing of custom user cases without restart.│
-│ • Air-Gapped Local LLM: Structured 10-section legal summaries via Ollama (Gemma 3 1B). │
+│ • Air-Gapped Local LLM: Structured 10-section legal summaries via Ollama (Gemma 3 1B).  │
 │ • Multi-Year S3 Streaming Ingest: Incremental download with automatic disk purging.     │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -30,15 +32,34 @@ The platform is engineered around an **Agentic LangGraph StateGraph** architectu
 
 ```mermaid
 flowchart TD
-    subgraph Layer_Client ["1. Client & Presentation Layer (Streamlit)"]
+    subgraph Layer_Client ["1. Client & Presentation Layer (Streamlit Frontend)"]
         UI_Match["Tab 1: 🔎 Case Matcher & State Trace"]
-        UI_Custom["Tab 2: ➕ Custom Case Manager (Live Index)"]
+        UI_Custom["Tab 2: ➕ Custom Case Manager (Live Dynamic Index)"]
         UI_Analytics["Tab 3: 📊 Dataset Analytics & Coverage"]
     end
 
-    subgraph Layer_LangGraph ["2. Agentic LangGraph StateGraph Core"]
+    subgraph Layer_OCR_Ingest ["2. Multi-Engine OCR & Document Ingestion Subsystem"]
+        DocIn["Input Document (PDF / Image / Text)"]
+        PyMuPDF_Node["PyMuPDF Native Text Extractor"]
+        Raster_Node["200 DPI Page Rasterizer"]
+        Paddle_Node["PaddleOCR / RapidOCR Engine\n(DBNet Detection + CRNN Recognition)"]
+        Conf_Check{"OCR Confidence\n>= 0.60?"}
+        Mistral_Node["Mistral AI OCR / Vision API\n(Multimodal LLM Fallback)"]
+        Scoped_Repair["2-Pass Character Confusion Repair\n(O->0, I/l->1, S->5, B->8)"]
+
+        DocIn --> PyMuPDF_Node
+        PyMuPDF_Node -- "Native Text Found" --> Scoped_Repair
+        PyMuPDF_Node -- "Scanned / Raster Only" --> Raster_Node
+        Raster_Node --> Paddle_Node
+        Paddle_Node --> Conf_Check
+        Conf_Check -- "Yes (High Confidence)" --> Scoped_Repair
+        Conf_Check -- "No (Degraded / Low Conf)" --> Mistral_Node
+        Mistral_Node --> Scoped_Repair
+    end
+
+    subgraph Layer_LangGraph ["3. Agentic LangGraph StateGraph Core"]
         direction TB
-        Node_OCR["Node 1: OCR & Text Extraction\n(PyMuPDF / PaddleOCR ONNX)"]
+        Node_OCR["Node 1: OCR & Text Extraction State"]
         Node_Exact["Node 2: Exact Matcher\n(Normalized CNR & NC Hash Index)"]
         Node_Fuzzy["Node 3: Fuzzy Matcher\n(Legal Stopword Filter + RapidFuzz)"]
         Node_Semantic["Node 4: Semantic Hybrid Search\n(FAISS Dense + BM25 Okapi Sparse)"]
@@ -57,7 +78,7 @@ flowchart TD
         Node_Semantic --> Node_Summary
     end
 
-    subgraph Layer_Data ["3. Data & Index Storage Subsystem"]
+    subgraph Layer_Data ["4. Data & Index Storage Subsystem"]
         MasterParquet[("Master Canonical Dataset\ncanonical_cases_2021_2026.parquet\n(12,688 Records, 2010–2025)")]
         CustomParquet[("Custom Cases Store\ncustom_cases.parquet")]
         FAISS_Store[("FAISS Dense Vector Index\n(38,064 Chunk Vectors, 384-d)")]
@@ -65,13 +86,14 @@ flowchart TD
         AWS_S3_Store[("AWS S3 Open Data Registry\ns3://indian-supreme-court-judgments/")]
     end
 
-    subgraph Layer_Local_LLM ["4. Local Inference Service (Air-Gapped)"]
+    subgraph Layer_Local_LLM ["5. Local Inference Service (Air-Gapped)"]
         OllamaDaemon["Ollama Service Daemon (Port 11434)"]
         GemmaModel["gemma3:1b Local Weights"]
         OllamaDaemon --> GemmaModel
     end
 
-    UI_Match --> Node_OCR
+    UI_Match --> DocIn
+    Scoped_Repair --> Node_OCR
     UI_Custom -->|"Dynamic Index Update"| CustomParquet
     CustomParquet -->|"Concatenate & Re-index"| MasterParquet
     MasterParquet --> FAISS_Store & BM25_Store
@@ -86,23 +108,126 @@ flowchart TD
 
 ---
 
-## 3. Comprehensive Feature Matrix
+## 3. Dedicated OCR Pipeline & Intelligent Fallback Architecture
 
-### 3.1. Input Processing & Ingestion
+### 3.1. OCR Workflow Diagram
+
+```mermaid
+flowchart TD
+    subgraph Document_Entry ["Document Entry & Pre-Flight"]
+        InputDoc["Uploaded Document (.pdf, .png, .jpg, .txt)"]
+        DocClassifier{"Document Format / Type"}
+        InputDoc --> DocClassifier
+    end
+
+    subgraph Native_Extraction ["Fast Path: Direct Digital Stream"]
+        PyMuPDF["PyMuPDF (fitz)\nDirect Stream Text Layer Extraction"]
+        TextCheck{"Direct Text\nLength > 50 chars?"}
+        DocClassifier -- "Digital PDF / TXT" --> PyMuPDF
+        PyMuPDF --> TextCheck
+    end
+
+    subgraph Local_OCR ["Local Stage: RapidOCR / PaddleOCR ONNX Runtime"]
+        Rasterizer["High-Res Rasterizer\n(200 DPI RGB Pixmap)"]
+        DBNet["DBNet Text Detection\n(Segment Bounding Boxes)"]
+        Classifier["Direction Classifier\n(0° / 90° / 180° / 270° Rotation)"]
+        CRNN["CRNN / SVTR Text Recognition\n(Predict Character Tokens + Confidence)"]
+        ConfEvaluator{"Average Page Confidence\n>= 0.60 & Text > 50 chars?"}
+
+        DocClassifier -- "Scanned PDF / Image" --> Rasterizer
+        TextCheck -- "No Text Layer (Scanned)" --> Rasterizer
+        Rasterizer --> DBNet
+        DBNet --> Classifier
+        Classifier --> CRNN
+        CRNN --> ConfEvaluator
+    end
+
+    subgraph Cloud_Fallback ["Advanced Multimodal Fallback: Mistral AI OCR"]
+        MistralAPI["Mistral AI OCR / Vision API\n(mistral-ocr-latest / pixtral-12b)"]
+        MistralFormatter["Structured Markdown Text Reconstruction\n& Table Preservation"]
+        
+        ConfEvaluator -- "No (Low Conf < 0.60 / Degraded)" --> MistralAPI
+        MistralAPI --> MistralFormatter
+    end
+
+    subgraph Post_Processing ["2-Pass Post-Processor & Scoped Disambiguation"]
+        Pass1{"Pass 1: Strict Regex\nFound CNR / Neutral Citation?"}
+        Pass2["Pass 2: Scoped Character Confusion Repair\nApply O->0, I/l->1, S->5, B->8 to Candidate Tokens"]
+        NormalizedOutput["Normalized Text & Structured Query Record\n(3 Layers: raw_text, geometry_text, final_text)"]
+
+        TextCheck -- "Yes (Clean Digital Text)" --> Pass1
+        ConfEvaluator -- "Yes (High Confidence >= 0.60)" --> Pass1
+        MistralFormatter --> Pass1
+
+        Pass1 -- "Yes (Valid Identifier)" --> NormalizedOutput
+        Pass1 -- "No (Corrupted Candidate)" --> Pass2
+        Pass2 --> NormalizedOutput
+    end
+
+    NormalizedOutput --> LangGraphEntry["LangGraph StateGraph: node_ocr_extract"]
+```
+
+---
+
+### 3.2. Detailed Multi-Engine OCR Strategy
+
+#### 1. Baseline Primary Engine: PaddleOCR / RapidOCR (ONNX Runtime)
+- **Execution**: 100% local, lightweight, sub-second execution on CPU/ARM64.
+- **Architecture**:
+  - **Detection**: Real-time Differentiable Binarization (`DBNet`) extracts text polygon bounding boxes.
+  - **Orientation**: Angle classification module automatically corrects inverted or rotated legal briefs ($0^\circ, 90^\circ, 180^\circ, 270^\circ$).
+  - **Recognition**: Connectionist Temporal Classification (`CRNN` / `SVTR`) converts polygon feature maps into character tokens with individual confidence scores.
+
+#### 2. Low-Confidence Fallback Engine: Mistral AI OCR & Vision API
+- **Trigger Condition**: Automatically activates when:
+  - PaddleOCR confidence score falls below **$0.60$** ($60\%$).
+  - Page text output contains fewer than 50 valid characters despite active image contours (indicating watermarks, heavy stamp bleed, or physical degradation).
+  - Skew or distortion exceeds local deskew rectification capabilities.
+- **Mechanism**:
+  - Encodes the rasterized high-resolution page as a base64 payload.
+  - Dispatches an asynchronous request to Mistral AI's Vision/OCR endpoint (`mistral-ocr-latest` or `pixtral-12b`).
+  - Mistral AI performs deep multimodal contextual recognition, resolving handwritten notes, damaged carbon copies, legal stamps, and tabular headnotes.
+  - Reconstructs clean, formatted Markdown output for downstream matching.
+
+#### 3. 2-Pass Scoped Character-Confusion Recovery Engine
+- **Pass 1 (Strict Extraction)**:
+  - Regex scan: `\b(?:ESCR|[A-Z]{4,7})\d{10,12}\b` (CNR) and `\b(\d{4})\s*INSC\s*(\d+)\b` (Neutral Citation).
+- **Pass 2 (Scoped Disambiguation)**:
+  - If a potential identifier is detected with character corruption (e.g. `ESCR-OIOOOII52O2I`), Pass 2 strictly targets the candidate token:
+    $$\text{Substitutions: } O, o \rightarrow 0 \quad|\quad I, l \rightarrow 1 \quad|\quad S, s \rightarrow 5 \quad|\quad B \rightarrow 8$$
+  - Eliminates false-negative OCR errors without touching valid natural English words.
+
+---
+
+## 4. Comprehensive Feature Matrix
+
+### 4.1. Input Processing & Ingestion
 - **Tri-Modal Document Ingestion**:
   1. **Raw Text / Snippet Paste**: Instant matching on snippets, headnotes, CNR codes, or party names.
   2. **Native Digital PDF / TXT Upload**: Direct in-memory byte extraction via PyMuPDF (`fitz`), handling complex typography and line wraps.
-  3. **Scanned PDF / Rasterized Document OCR**: Converts raster pages to 200 DPI pixmaps and processes via RapidOCR / PaddleOCR ONNX Runtime.
-- **2-Pass Scoped Character-Confusion Recovery**:
-  - *Pass 1 (Strict Extraction)*: Executes high-speed regex search (`\b(?:ESCR|[A-Z]{4,7})\d{10,12}\b` and `\b(\d{4})\s*INSC\s*(\d+)\b`).
-  - *Pass 2 (Scoped Disambiguation)*: If Pass 1 detects a damaged candidate token, applies character-confusion mapping strictly to candidate alphanumeric sequences:
-    $$\{O, o\} \rightarrow 0,\quad \{I, l\} \rightarrow 1,\quad \{S, s\} \rightarrow 5,\quad \{B\} \rightarrow 8$$
-  - Eliminates false-negative OCR errors without corrupting natural language text.
+  3. **Scanned PDF / Rasterized Document OCR**: Converts raster pages to 200 DPI pixmaps and processes via RapidOCR / PaddleOCR ONNX Runtime with automatic Mistral AI fallback.
 
-### 3.2. LangGraph StateGraph Workflow Engine
-- **Deterministic State Machine**: Employs `MatchingState` TypedDict to preserve state across node transitions.
+### 4.2. LangGraph StateGraph Workflow Engine
+- **Deterministic State Machine**: Employs `MatchingState` TypedDict to preserve state across node transitions:
+  ```python
+  class MatchingState(TypedDict):
+      raw_input: Any
+      filename: str
+      is_ocr: bool
+      extracted_text: str
+      ocr_corrected: bool
+      fields: Dict[str, Any]
+      query_rec: Dict[str, Any]
+      matched_record: Optional[Dict[str, Any]]
+      match_tier: str       # "exact" | "fuzzy" | "semantic" | "none"
+      confidence: float     # 0.0 to 1.0
+      matched_on: str
+      summary: str
+      execution_trace: List[str]
+      error: Optional[str]
+  ```
 - **Node Pipeline**:
-  - `node_ocr_extract`: Performs byte decoding, PyMuPDF extraction, ONNX OCR, and 2-pass identifier repair.
+  - `node_ocr_extract`: Performs byte decoding, PyMuPDF extraction, ONNX OCR, Mistral fallback, and 2-pass identifier repair.
   - `node_exact_match`: Checks normalized hash indices for direct CNR or `(case_number + court + year)` match.
   - `node_fuzzy_match`: Evaluates party name and case number token overlap with legal stopword filtering.
   - `node_semantic_match`: Executes hybrid dense-sparse vector scoring using FAISS + BM25.
@@ -111,7 +236,7 @@ flowchart TD
   - Exact match found $\rightarrow$ skips fuzzy and semantic nodes, jumping directly to summarization (latency $< 2\text{ ms}$).
   - High-confidence fuzzy match found ($\ge 0.70$) $\rightarrow$ skips semantic vector search (latency $< 20\text{ ms}$).
 
-### 3.3. 3-Tier Match Cascade Details
+### 4.3. 3-Tier Match Cascade Details
 
 ```
 [ Query Record ]
@@ -140,7 +265,7 @@ flowchart TD
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.4. Dynamic Custom Case Management
+### 4.4. Dynamic Custom Case Management
 - **Interactive UI Case Creation**: Users enter custom case metadata (`CNR`, `Neutral Citation`, `Title`, `Petitioner`, `Respondent`, `Bench`, `Date`, `Disposal`, `Text`).
 - **Real-Time Live Re-Indexing**:
   - Dynamically updates runtime DataFrame in memory.
@@ -149,7 +274,7 @@ flowchart TD
 - **Persistent Storage**: Atomically updates `legal_case_app/data/custom_cases.parquet`.
 - **Bundle Export & Import**: Export all custom cases to `.json` bundles or import external test suites in bulk.
 
-### 3.5. Local AI Document Synthesis & Summarizer
+### 4.5. Local AI Document Synthesis & Summarizer
 - **10-Point Structured Legal Synthesis**:
   1. *Case Information & Citations*
   2. *Facts of the Dispute*
@@ -165,7 +290,7 @@ flowchart TD
 - **Graceful Fallback**: Deterministic template generator activates automatically if the local LLM daemon is offline.
 - **Export Formats**: One-click download of generated summaries as Markdown (`.md`) or Plain Text (`.txt`).
 
-### 3.6. Multi-Year S3 Streaming Ingest Pipeline (`run_yearly_ingest.sh`)
+### 4.6. Multi-Year S3 Streaming Ingest Pipeline (`run_yearly_ingest.sh`)
 - **Direct S3 Open Data Ingestion**: Downloads year archives directly from `s3://indian-supreme-court-judgments/data/tar/year=YYYY/english/english.tar`.
 - **In-Memory Streaming Extraction**: PyMuPDF parses judgment PDFs from memory buffers to extract CNR numbers, citations, party names, and text chunks.
 - **Deduplication & Merge**: Appends unique cases to `canonical_cases_2021_2026.parquet`.
@@ -173,7 +298,7 @@ flowchart TD
 
 ---
 
-## 4. Software & Technology Stack Matrix
+## 5. Software & Technology Stack Matrix
 
 | Technology | Version / Spec | Role in System | Selection Rationale |
 | :--- | :--- | :--- | :--- |
@@ -181,20 +306,21 @@ flowchart TD
 | **`langgraph`** | `>= 1.2.0` | Orchestration Engine | Deterministic state machine, conditional routing, cyclic graphs |
 | **`langchain-core`** | `>= 1.6.0` | Agent Interfaces | Standardized state schemas and prompt wrappers |
 | **`streamlit`** | `>= 1.30.0` | Production Web UI | Reactive UI, session state management, native data table widgets |
-| **`rapidocr-onnxruntime`** | `>= 1.3.0` | OCR Engine | Lightweight, high-accuracy ONNX inference without heavy PyTorch dependency |
+| **`rapidocr-onnxruntime`** | `>= 1.3.0` | Primary OCR Engine | Lightweight, high-accuracy ONNX inference without heavy GPU dependencies |
+| **`Mistral AI OCR / Vision`** | `API v1` | Fallback OCR Engine | Multimodal contextual recovery for degraded, damaged or low-confidence scans |
 | **`PyMuPDF (fitz)`** | `>= 1.23.0` | PDF Parser / Rasterizer | C-accelerated MuPDF backend; sub-millisecond page text extraction |
 | **`faiss-cpu`** | `>= 1.7.4` | Dense Vector Search | Vector inner-product scoring across 38,000+ chunk embeddings |
 | **`sentence-transformers`** | `>= 2.2.2` | Dense Embedder | Runs `all-MiniLM-L6-v2` (384-dimensional dense vectors) |
 | **`rapidfuzz`** | `>= 3.0.0` | Fuzzy Token Matcher | C++ accelerated Levenshtein string matching and token sorting |
 | **`pandas` & `pyarrow`** | `>= 2.0.0` | Columnar Data Engine | High-throughput Snappy-compressed Parquet I/O with zero copy |
 | **`Ollama` (`gemma3:1b`)** | `Latest` | Local Legal LLM | Ultra-fast local instruction-tuned LLM inference (sub-2s responses) |
-| **`httpx`** | `>= 0.25.0` | Async HTTP Client | Low-latency HTTP communication with local Ollama daemon |
+| **`httpx`** | `>= 0.25.0` | Async HTTP Client | Low-latency HTTP communication with Ollama daemon and Mistral API |
 
 ---
 
-## 5. Storage, Data Model & Directory Layout
+## 6. Storage, Data Model & Directory Layout
 
-### 5.1. Directory Structure
+### 6.1. Directory Structure
 
 ```text
 /Users/yashsharma/Desktop/Final_OCR_Pipeline/
@@ -206,7 +332,7 @@ flowchart TD
 │       └── custom_cases.parquet        # Persistent store for user-created custom cases
 │
 ├── backend/
-│   ├── paddleocr_engine.py             # RapidOCR/PaddleOCR ONNX engine wrapper
+│   ├── paddleocr_engine.py             # RapidOCR/PaddleOCR ONNX engine wrapper (extract_text)
 │   ├── ocr_engine.py                   # Bounding box & token data models
 │   └── venv/                           # Production Python Virtual Environment
 │
@@ -232,12 +358,12 @@ flowchart TD
 ├── run_app.sh                          # Master one-click application launcher
 ├── run_yearly_ingest.sh                # CLI for year-by-year incremental ingestion
 ├── setup_and_run.sh                    # Initial setup & dependency bootstrapper
-└── ARCHITECTURE.md                     # System blueprint & deployment manual
+└── ARCHITECTURE.md                     # Comprehensive System Blueprint & Deployment Manual
 ```
 
 ---
 
-### 5.2. Parquet Schema Specification (`canonical_cases.parquet`)
+### 6.2. Parquet Schema Specification (`canonical_cases.parquet`)
 
 | Column Name | SQL Type | Nullable | Description |
 | :--- | :--- | :---: | :--- |
@@ -262,9 +388,9 @@ flowchart TD
 
 ---
 
-## 6. Production Deployment Blueprint
+## 7. Production Deployment Blueprint
 
-### 6.1. System Hardware Sizing & Specifications
+### 7.1. System Hardware Sizing & Specifications
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -283,7 +409,7 @@ flowchart TD
 
 ---
 
-### 6.2. Bare-Metal / Virtual Machine Production Deployment
+### 7.2. Bare-Metal / Virtual Machine Production Deployment
 
 #### Step 1: Clone Repository & Create Virtualenv
 ```bash
@@ -313,7 +439,15 @@ sudo systemctl enable --now ollama
 ollama pull gemma3:1b
 ```
 
-#### Step 3: Configure Systemd Application Daemon
+#### Step 3: Configure Environment & API Keys
+Create `/opt/legal-platform/.env`:
+```ini
+# Optional Mistral API Key for Low-Confidence OCR Fallback
+MISTRAL_API_KEY=your_mistral_api_key_here
+OLLAMA_HOST=http://localhost:11434
+```
+
+#### Step 4: Configure Systemd Application Daemon
 Create `/etc/systemd/system/legal-platform.service`:
 
 ```ini
@@ -337,6 +471,7 @@ ExecStart=/opt/legal-platform/backend/venv/bin/streamlit run legal_case_app/app.
 Restart=always
 RestartSec=5
 LimitNOFILE=65535
+EnvironmentFile=/opt/legal-platform/.env
 Environment=PYTHONPATH=/opt/legal-platform:/opt/legal-platform/backend:/opt/legal-platform/okf-benchmark/engine_source
 Environment=TOKENIZERS_PARALLELISM=false
 
@@ -353,11 +488,10 @@ sudo systemctl status legal-platform.service
 
 ---
 
-### 6.3. Containerized Deployment (Docker & Docker Compose)
+### 7.3. Containerized Deployment (Docker & Docker Compose)
 
 #### `Dockerfile`
 ```dockerfile
-# Multi-stage production build
 FROM python:3.11-slim AS builder
 
 WORKDIR /app
@@ -416,6 +550,7 @@ services:
       - "8501:8501"
     environment:
       - OLLAMA_HOST=http://ollama:11434
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
     volumes:
       - ./legal_case_app/data:/app/legal_case_app/data
       - ./okf-benchmark/engine_source/reports:/app/okf-benchmark/engine_source/reports
@@ -426,16 +561,9 @@ volumes:
   ollama_storage:
 ```
 
-```bash
-# Launch multi-container deployment
-docker compose up -d --build
-# Pull Gemma model inside Ollama container
-docker compose exec ollama ollama pull gemma3:1b
-```
-
 ---
 
-### 6.4. NGINX Reverse Proxy with SSL Termination
+### 7.4. NGINX Reverse Proxy with SSL Termination
 
 ```nginx
 upstream streamlit_backend {
@@ -486,10 +614,9 @@ server {
 
 ---
 
-## 7. Operational Runbooks & Administration
+## 8. Operational Runbooks & Administration
 
-### 7.1. Ingesting Additional Historical Judgments
-To ingest additional decades from the AWS Open Data Registry:
+### 8.1. Ingesting Additional Historical Judgments
 ```bash
 # Ingest 2000 through 2009
 ./run_yearly_ingest.sh $(seq 2000 2009)
@@ -498,7 +625,7 @@ To ingest additional decades from the AWS Open Data Registry:
 ./run_yearly_ingest.sh $(seq 1950 1999)
 ```
 
-### 7.2. Backup and Disaster Recovery
+### 8.2. Backup and Disaster Recovery
 ```bash
 # Backup master Parquet dataset and user custom cases
 tar -czvf legal_backup_$(date +%F).tar.gz \
@@ -509,7 +636,7 @@ tar -czvf legal_backup_$(date +%F).tar.gz \
 tar -xzvf legal_backup_YYYY-MM-DD.tar.gz
 ```
 
-### 7.3. Health Checks & Diagnostics
+### 8.3. Health Checks & Diagnostics
 - **App Health**: `curl -f http://localhost:8501/_stcore/health` (Returns `ok`)
 - **Ollama LLM Status**: `curl http://localhost:11434/api/tags`
 - **LangGraph Verification**:
@@ -525,16 +652,16 @@ tar -xzvf legal_backup_YYYY-MM-DD.tar.gz
 
 ---
 
-## 8. Security & Air-Gapped Compliance
+## 9. Security & Air-Gapped Compliance
 
-1. **Complete On-Premises Privacy**: OCR, dense embedding generation, vector searches, and LLM text generation occur entirely on the local machine without making outbound network requests.
-2. **Deterministic Fallbacks**: If external daemons become unresponsive, the pipeline falls back to rule-based structured templates, ensuring 100% uptime.
+1. **Complete On-Premises Privacy**: Local OCR, dense embedding generation, vector searches, and LLM text generation occur entirely on the local machine without making outbound network requests.
+2. **Deterministic Fallbacks**: If external daemons or cloud APIs become unresponsive, the pipeline falls back to rule-based structured templates and local OCR, ensuring 100% uptime.
 3. **Data Hygiene**: Sanitizes text buffers against byte injections, non-printable characters, and malformed unicode.
 4. **Input Size Limits**: Enforces 100MB max payload limits at the NGINX and Streamlit layers to prevent memory exhaustion attacks.
 
 ---
 
-## 9. Scalability Roadmap
+## 10. Scalability Roadmap
 
 ```mermaid
 graph LR
