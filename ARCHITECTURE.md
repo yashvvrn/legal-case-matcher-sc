@@ -1,222 +1,298 @@
-# 🏛️ System Architecture & Production Deployment Blueprint
-## Indian Supreme Court Legal Case Matcher & Custom Case Engine
+# 🏛️ Comprehensive System Architecture, Feature Specification & Production Deployment Blueprint
+## Indian Supreme Court Legal Case Matcher & Dynamic Custom Case Engine
 
 ---
 
-## 1. Executive System Overview
+## 1. Executive Summary & System Mission
 
-The **Legal Case Matcher & Custom Case Engine** is a high-throughput, fault-tolerant legal intelligence system designed to ingest, process, match, and analyze Indian Supreme Court judgments (1950–Present, spanning 12,680+ canonical decisions) along with real-time user-provided custom cases.
+The **Indian Supreme Court Legal Case Matcher & Dynamic Custom Case Platform** is an enterprise-grade, air-gapped legal intelligence system designed to ingest, process, match, and synthesize Indian Supreme Court decisions (1950–Present, spanning **12,688+ canonical judgments**) alongside user-created custom litigation records.
 
-The system is built on a **LangGraph StateGraph** agentic architecture with a multi-layered fallback cascade:
-1. **OCR Ingestion & 2-Pass Character Recovery Engine**: High-fidelity text extraction and OCR confusion repair (`O` $\leftrightarrow$ `0`, `I`/`l` $\leftrightarrow$ `1`, `S` $\leftrightarrow$ `5`, `B` $\leftrightarrow$ `8`).
-2. **3-Tier Matching Cascade**: Exact Key Lookup $\rightarrow$ RapidFuzz Token Match $\rightarrow$ Dense FAISS + Sparse BM25 Hybrid Search.
-3. **Dynamic Custom Case Indexer**: In-memory and on-disk Parquet indexing allowing live updates without service interruption.
-4. **Local Neural Summarizer**: Offline structured 10-point legal summaries generated via Ollama (`gemma3:1b`).
+The platform is engineered around an **Agentic LangGraph StateGraph** architecture backed by a fault-tolerant multi-tiered search cascade, high-accuracy OCR with 2-pass character repair, on-the-fly vector re-indexing, and local LLM-driven structured legal synthesis.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                                   CORE PLATFORM HIGHLIGHTS                              │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
+│ • Canonical Corpus: 12,688+ Supreme Court judgments (2010–2025) via AWS S3 Open Data.   │
+│ • StateGraph Agentic Workflow: Deterministic state machine with dynamic node routing.   │
+│ • 3-Tier Match Cascade: Sub-millisecond exact lookup → Fuzzy token match → Dense/Sparse │
+│   hybrid semantic search (FAISS + BM25).                                                │
+│ • 2-Pass OCR Recovery: Scoped disambiguation repairing OCR character corruptions.      │
+│ • Dynamic In-Memory Indexer: Instant live indexing of custom user cases without restart.│
+│ • Air-Gapped Local LLM: Structured 10-section legal summaries via Ollama (Gemma 3 1B). │
+│ • Multi-Year S3 Streaming Ingest: Incremental download with automatic disk purging.     │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## 2. High-Level Architecture Diagram
+## 2. End-to-End System Architecture
 
 ```mermaid
 flowchart TD
-    subgraph Client_Layer ["Client & Ingestion Layer"]
-        UI["Streamlit Frontend (Port 8501)"]
-        UploadPDF["Scanned / Native PDF"]
-        UploadText["Raw Text Excerpt"]
-        CustomForm["Custom Case Entry Form"]
+    subgraph Layer_Client ["1. Client & Presentation Layer (Streamlit)"]
+        UI_Match["Tab 1: 🔎 Case Matcher & State Trace"]
+        UI_Custom["Tab 2: ➕ Custom Case Manager (Live Index)"]
+        UI_Analytics["Tab 3: 📊 Dataset Analytics & Coverage"]
     end
 
-    subgraph LangGraph_Core ["LangGraph StateGraph Execution Pipeline"]
+    subgraph Layer_LangGraph ["2. Agentic LangGraph StateGraph Core"]
         direction TB
-        Node1["Node 1: OCR & 2-Pass Text Recovery\n(PyMuPDF / PaddleOCR ONNX)"]
-        Node2["Node 2: Exact Matcher\n(Normalized CNR / Neutral Citation Index)"]
-        Node3["Node 3: Fuzzy Matcher\n(RapidFuzz Party & Case Token Overlap)"]
-        Node4["Node 4: Semantic Hybrid Search\n(FAISS Dense + BM25 Sparse Matrix)"]
-        Node5["Node 5: AI Document Summarizer\n(Local Gemma 3 1B via Ollama)"]
+        Node_OCR["Node 1: OCR & Text Extraction\n(PyMuPDF / PaddleOCR ONNX)"]
+        Node_Exact["Node 2: Exact Matcher\n(Normalized CNR & NC Hash Index)"]
+        Node_Fuzzy["Node 3: Fuzzy Matcher\n(Legal Stopword Filter + RapidFuzz)"]
+        Node_Semantic["Node 4: Semantic Hybrid Search\n(FAISS Dense + BM25 Okapi Sparse)"]
+        Node_Summary["Node 5: AI Document Summarizer\n(Local Gemma 3 1B via Ollama)"]
 
-        Router1{"Exact Match\nFound?"}
-        Router2{"Fuzzy Match\n>= 0.70?"}
+        Router_Exact{"Exact Match\nFound (100%)?"}
+        Router_Fuzzy{"Fuzzy Match\nScore >= 0.70?"}
 
-        Node1 --> Node2
-        Node2 --> Router1
-        Router1 -- "Yes (1.0 Conf)" --> Node5
-        Router1 -- "No" --> Node3
-        Node3 --> Router2
-        Router2 -- "Yes (High Conf)" --> Node5
-        Router2 -- "No" --> Node4
-        Node4 --> Node5
+        Node_OCR --> Node_Exact
+        Node_Exact --> Router_Exact
+        Router_Exact -- "Yes" --> Node_Summary
+        Router_Exact -- "No" --> Node_Fuzzy
+        Node_Fuzzy --> Router_Fuzzy
+        Router_Fuzzy -- "Yes" --> Node_Summary
+        Router_Fuzzy -- "No" --> Node_Semantic
+        Node_Semantic --> Node_Summary
     end
 
-    subgraph Data_Storage ["Data & Storage Subsystem"]
-        MasterParquet[("Canonical SC Dataset Parquet\n(12,688 Records, 2010–2025)")]
+    subgraph Layer_Data ["3. Data & Index Storage Subsystem"]
+        MasterParquet[("Master Canonical Dataset\ncanonical_cases_2021_2026.parquet\n(12,688 Records, 2010–2025)")]
         CustomParquet[("Custom Cases Store\ncustom_cases.parquet")]
-        FAISS_Idx[("FAISS Vector Index\n(38,000+ Chunk Embeddings)")]
-        BM25_Idx[("BM25 Okapi Matrix")]
-        AWS_S3[("AWS S3 Open Data Registry\ns3://indian-supreme-court-judgments")]
+        FAISS_Store[("FAISS Dense Vector Index\n(38,064 Chunk Vectors, 384-d)")]
+        BM25_Store[("BM25 Okapi Sparse Term Matrix")]
+        AWS_S3_Store[("AWS S3 Open Data Registry\ns3://indian-supreme-court-judgments/")]
     end
 
-    subgraph LLM_Runtime ["Local LLM Service"]
-        OllamaDaemon["Ollama Daemon (Port 11434)"]
-        GemmaModel["Gemma 3 1B Model"]
+    subgraph Layer_Local_LLM ["4. Local Inference Service (Air-Gapped)"]
+        OllamaDaemon["Ollama Service Daemon (Port 11434)"]
+        GemmaModel["gemma3:1b Local Weights"]
+        OllamaDaemon --> GemmaModel
     end
 
-    UI --> UploadPDF & UploadText & CustomForm
-    UploadPDF & UploadText --> Node1
-    CustomForm --> CustomParquet
-    CustomParquet --> MasterParquet
-    MasterParquet --> FAISS_Idx & BM25_Idx
-    Node2 -.-> MasterParquet
-    Node3 -.-> MasterParquet
-    Node4 -.-> FAISS_Idx & BM25_Idx
-    Node5 --> OllamaDaemon
-    OllamaDaemon --> GemmaModel
-    AWS_S3 -.->|"Incremental Year Ingestion"| MasterParquet
+    UI_Match --> Node_OCR
+    UI_Custom -->|"Dynamic Index Update"| CustomParquet
+    CustomParquet -->|"Concatenate & Re-index"| MasterParquet
+    MasterParquet --> FAISS_Store & BM25_Store
+
+    Node_Exact -.-> MasterParquet
+    Node_Fuzzy -.-> MasterParquet
+    Node_Semantic -.-> FAISS_Store & BM25_Store
+    Node_Summary --> OllamaDaemon
+
+    AWS_S3_Store -.->|"run_yearly_ingest.sh\n(Stream & Purge)"| MasterParquet
 ```
 
 ---
 
-## 3. Core Component Architecture
+## 3. Comprehensive Feature Matrix
 
-### 3.1. OCR & 2-Pass Character Recovery Engine
-- **Primary Extraction**: PyMuPDF (`fitz`) handles rapid direct-stream text extraction from digital PDFs.
-- **Scanned PDF Processing**: RapidOCR / PaddleOCR (ONNX Runtime) extracts character coordinates, bounding boxes, and raw text layers.
-- **2-Pass Scoped Character Repair**:
-  - *Pass 1*: Strict regex extraction of CNR (`(?:ESCR|[A-Z]{4,7})\d{10,12}`) and Neutral Citation (`\d{4} INSC \d+`).
-  - *Pass 2*: Scoped character disambiguation applied strictly to candidate alphanumeric tokens if Pass 1 yields no valid identifier:
-    $$\text{Confusions: } \{O, o\} \rightarrow 0,\; \{I, l\} \rightarrow 1,\; \{S, s\} \rightarrow 5,\; \{B\} \rightarrow 8$$
+### 3.1. Input Processing & Ingestion
+- **Tri-Modal Document Ingestion**:
+  1. **Raw Text / Snippet Paste**: Instant matching on snippets, headnotes, CNR codes, or party names.
+  2. **Native Digital PDF / TXT Upload**: Direct in-memory byte extraction via PyMuPDF (`fitz`), handling complex typography and line wraps.
+  3. **Scanned PDF / Rasterized Document OCR**: Converts raster pages to 200 DPI pixmaps and processes via RapidOCR / PaddleOCR ONNX Runtime.
+- **2-Pass Scoped Character-Confusion Recovery**:
+  - *Pass 1 (Strict Extraction)*: Executes high-speed regex search (`\b(?:ESCR|[A-Z]{4,7})\d{10,12}\b` and `\b(\d{4})\s*INSC\s*(\d+)\b`).
+  - *Pass 2 (Scoped Disambiguation)*: If Pass 1 detects a damaged candidate token, applies character-confusion mapping strictly to candidate alphanumeric sequences:
+    $$\{O, o\} \rightarrow 0,\quad \{I, l\} \rightarrow 1,\quad \{S, s\} \rightarrow 5,\quad \{B\} \rightarrow 8$$
+  - Eliminates false-negative OCR errors without corrupting natural language text.
 
-### 3.2. LangGraph StateGraph Workflow
-The orchestration engine models execution as a deterministic finite state machine (`MatchingState`):
+### 3.2. LangGraph StateGraph Workflow Engine
+- **Deterministic State Machine**: Employs `MatchingState` TypedDict to preserve state across node transitions.
+- **Node Pipeline**:
+  - `node_ocr_extract`: Performs byte decoding, PyMuPDF extraction, ONNX OCR, and 2-pass identifier repair.
+  - `node_exact_match`: Checks normalized hash indices for direct CNR or `(case_number + court + year)` match.
+  - `node_fuzzy_match`: Evaluates party name and case number token overlap with legal stopword filtering.
+  - `node_semantic_match`: Executes hybrid dense-sparse vector scoring using FAISS + BM25.
+  - `node_summarize`: Formats the matched record and generates a 10-point structured summary.
+- **Conditional Short-Circuit Routing**:
+  - Exact match found $\rightarrow$ skips fuzzy and semantic nodes, jumping directly to summarization (latency $< 2\text{ ms}$).
+  - High-confidence fuzzy match found ($\ge 0.70$) $\rightarrow$ skips semantic vector search (latency $< 20\text{ ms}$).
 
-```python
-class MatchingState(TypedDict):
-    raw_input: Any
-    filename: str
-    is_ocr: bool
-    extracted_text: str
-    ocr_corrected: bool
-    fields: Dict[str, Any]
-    query_rec: Dict[str, Any]
-    matched_record: Optional[Dict[str, Any]]
-    match_tier: str       # "exact" | "fuzzy" | "semantic" | "none"
-    confidence: float     # 0.0 to 1.0
-    matched_on: str
-    summary: str
-    execution_trace: List[str]
-    error: Optional[str]
+### 3.3. 3-Tier Match Cascade Details
+
 ```
-- **Conditional Routing**: Short-circuits the pipeline to the summarization stage immediately upon finding high-confidence matches, conserving compute resources.
+[ Query Record ]
+       │
+       ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ TIER 1: EXACT MATCH (Confidence: 1.00 | Latency: < 1 ms)               │
+│ • Primary: Normalized CNR lookup in hash index.                        │
+│ • Secondary: (Case Number + Court + Year) composite key lookup.        │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ (If No Match)
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ TIER 2: FUZZY MATCH (Confidence: 0.70–0.98 | Latency: 5–15 ms)         │
+│ • Legal Stopwords Filter (STATE, UNION, INDIA, ORS, PETITIONER, etc.)  │
+│ • RapidFuzz token sort ratio & partial ratio on clean party names.     │
+│ • Disambiguation via decision date proximity & litigation family.      │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ (If No Match / Score < 0.70)
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ TIER 3: HYBRID SEMANTIC MATCH (Confidence: 0.75–1.00 | Latency: 20 ms) │
+│ • Dense: sentence-transformers/all-MiniLM-L6-v2 (384-d FAISS index)    │
+│ • Sparse: BM25 Okapi term frequency matrix across case chunks.         │
+│ • Score Formula: S = 0.65 * S_dense + 0.35 * S_sparse (Cutoff: 0.75)   │
+└────────────────────────────────────────────────────────────────────────┘
+```
 
-### 3.3. 3-Tier Match Cascade
-1. **Tier 1 (Exact Match)**:
-   - Primary Key: Normalized alphanumeric CNR comparison.
-   - Secondary Key: `(Case Number + Court Name + Year)` composite lookup against hash maps.
-   - Latency: $< 1\text{ ms}$.
-2. **Tier 2 (Fuzzy Token Match)**:
-   - Pre-filters candidates via token intersection after removing legal stopwords (`STATE`, `UNION`, `INDIA`, `ORS`, `PETITIONER`, `RESPONDENT`, etc.).
-   - Employs RapidFuzz token sort and ratio matching with a confidence threshold $\ge 0.70$.
-   - Latency: $5\text{--}15\text{ ms}$.
-3. **Tier 3 (Hybrid Semantic Match)**:
-   - **Dense Embeddings**: `sentence-transformers/all-MiniLM-L6-v2` generates 384-dimensional dense vectors across case opening, holding, and body text.
-   - **Sparse Scoring**: BM25 Okapi calculates term-frequency sparse relevance.
-   - **Ensemble Function**:
-     $$S_{\text{hybrid}} = \alpha \cdot S_{\text{dense}} + (1 - \alpha) \cdot S_{\text{sparse}} \quad (\alpha = 0.65)$$
-   - Minimum activation threshold: $0.75$.
-   - Latency: $15\text{--}30\text{ ms}$.
+### 3.4. Dynamic Custom Case Management
+- **Interactive UI Case Creation**: Users enter custom case metadata (`CNR`, `Neutral Citation`, `Title`, `Petitioner`, `Respondent`, `Bench`, `Date`, `Disposal`, `Text`).
+- **Real-Time Live Re-Indexing**:
+  - Dynamically updates runtime DataFrame in memory.
+  - Appends embeddings to FAISS vector index and rebuilds BM25 term matrices on-the-fly.
+  - Newly created cases are immediately queryable without server restarts.
+- **Persistent Storage**: Atomically updates `legal_case_app/data/custom_cases.parquet`.
+- **Bundle Export & Import**: Export all custom cases to `.json` bundles or import external test suites in bulk.
 
-### 3.4. Dynamic In-Memory & Persistent Custom Case Engine
-- Maintains a runtime registry (`CustomCaseManager`) that persists user-created cases into `custom_cases.parquet`.
-- Re-indexes the in-memory FAISS vector index and BM25 sparse structures in real-time.
-- Supports batch export and import of `.json` bundles for seamless sharing across environments.
+### 3.5. Local AI Document Synthesis & Summarizer
+- **10-Point Structured Legal Synthesis**:
+  1. *Case Information & Citations*
+  2. *Facts of the Dispute*
+  3. *Procedural History*
+  4. *Core Legal Issues Framed*
+  5. *Petitioner Arguments*
+  6. *Respondent Submissions*
+  7. *Court's Legal Reasoning & Precedents*
+  8. *Final Holding / Decision*
+  9. *Statutory Provisions Applied*
+  10. *Key Legal Takeaways*
+- **Local LLM**: Powered by `gemma3:1b` running locally via the Ollama HTTP API (Port 11434).
+- **Graceful Fallback**: Deterministic template generator activates automatically if the local LLM daemon is offline.
+- **Export Formats**: One-click download of generated summaries as Markdown (`.md`) or Plain Text (`.txt`).
+
+### 3.6. Multi-Year S3 Streaming Ingest Pipeline (`run_yearly_ingest.sh`)
+- **Direct S3 Open Data Ingestion**: Downloads year archives directly from `s3://indian-supreme-court-judgments/data/tar/year=YYYY/english/english.tar`.
+- **In-Memory Streaming Extraction**: PyMuPDF parses judgment PDFs from memory buffers to extract CNR numbers, citations, party names, and text chunks.
+- **Deduplication & Merge**: Appends unique cases to `canonical_cases_2021_2026.parquet`.
+- **Zero Disk Waste**: Automatically purges raw year archives from `/tmp/year_ingest/` immediately after processing, maintaining a sub-500MB local disk footprint.
 
 ---
 
-## 4. Comprehensive Tech Stack
+## 4. Software & Technology Stack Matrix
 
-| Layer / Component | Technology | Version | Purpose & Function |
+| Technology | Version / Spec | Role in System | Selection Rationale |
 | :--- | :--- | :--- | :--- |
-| **Agentic Workflow** | `langgraph` | `>= 1.2.0` | StateGraph execution, node transitions & conditional routing |
-| **LLM Core Framework** | `langchain-core` | `>= 1.6.0` | Schema standardizations & agent interfaces |
-| **Frontend UI** | `streamlit` | `>= 1.30.0` | High-responsiveness web UI & dashboard |
-| **OCR (ONNX)** | `rapidocr-onnxruntime` / `paddleocr` | `>= 2.7.0` | High-accuracy offline optical character recognition |
-| **PDF Processing** | `PyMuPDF` (`fitz`) | `>= 1.23.0` | Direct stream memory extraction & rasterization |
-| **Dense Vector Search** | `faiss-cpu` | `>= 1.7.4` | Inverted index & inner product dense vector search |
-| **Embeddings Model** | `sentence-transformers` | `>= 2.2.2` | `all-MiniLM-L6-v2` 384-d dense embedding generation |
-| **Fuzzy Matching** | `rapidfuzz` | `>= 3.0.0` | C++ accelerated Levenshtein & token ratio matcher |
-| **Data Engine** | `pandas`, `pyarrow` | `>= 2.0.0` | Columnar Parquet read/write & deduplication engine |
-| **LLM Inference** | `Ollama` (`gemma3:1b`) | `Latest` | Local offline 10-section structured legal summarization |
-| **HTTP Engine** | `httpx` | `>= 0.25.0` | Asynchronous communication with Ollama daemon |
+| **`Python`** | `3.11+` | Core Runtime Engine | High performance, rich ML/data ecosystem |
+| **`langgraph`** | `>= 1.2.0` | Orchestration Engine | Deterministic state machine, conditional routing, cyclic graphs |
+| **`langchain-core`** | `>= 1.6.0` | Agent Interfaces | Standardized state schemas and prompt wrappers |
+| **`streamlit`** | `>= 1.30.0` | Production Web UI | Reactive UI, session state management, native data table widgets |
+| **`rapidocr-onnxruntime`** | `>= 1.3.0` | OCR Engine | Lightweight, high-accuracy ONNX inference without heavy PyTorch dependency |
+| **`PyMuPDF (fitz)`** | `>= 1.23.0` | PDF Parser / Rasterizer | C-accelerated MuPDF backend; sub-millisecond page text extraction |
+| **`faiss-cpu`** | `>= 1.7.4` | Dense Vector Search | Vector inner-product scoring across 38,000+ chunk embeddings |
+| **`sentence-transformers`** | `>= 2.2.2` | Dense Embedder | Runs `all-MiniLM-L6-v2` (384-dimensional dense vectors) |
+| **`rapidfuzz`** | `>= 3.0.0` | Fuzzy Token Matcher | C++ accelerated Levenshtein string matching and token sorting |
+| **`pandas` & `pyarrow`** | `>= 2.0.0` | Columnar Data Engine | High-throughput Snappy-compressed Parquet I/O with zero copy |
+| **`Ollama` (`gemma3:1b`)** | `Latest` | Local Legal LLM | Ultra-fast local instruction-tuned LLM inference (sub-2s responses) |
+| **`httpx`** | `>= 0.25.0` | Async HTTP Client | Low-latency HTTP communication with local Ollama daemon |
 
 ---
 
-## 5. Storage & Data Architecture
+## 5. Storage, Data Model & Directory Layout
+
+### 5.1. Directory Structure
 
 ```text
-legal_case_app/
-├── app.py                          # Streamlit Production Frontend
-├── engine.py                       # Consolidated Backend Engine & LangGraph StateGraph
-├── requirements.txt                # Production dependency specification
-└── data/
-    └── custom_cases.parquet        # Persistent store for user-created custom cases
-
-okf-benchmark/engine_source/
-├── config.yaml                     # Engine thresholds & hyperparameter configuration
-├── reports/
-│   ├── canonical_cases_2021_2026.parquet  # Master dataset (12,688 SC judgments)
-│   └── 150_doc_benchmark_report.md       # Empirical benchmark evaluation report
-└── src/
-    ├── ingest/incremental_year_ingest.py # Multi-year S3 streaming ingester
-    └── match/                            # Cascade search modules (Exact, Fuzzy, Semantic)
+/Users/yashsharma/Desktop/Final_OCR_Pipeline/
+├── legal_case_app/
+│   ├── app.py                          # Streamlit Production Frontend (Tabs: Match, Custom, Analytics)
+│   ├── engine.py                       # Consolidated Backend Engine & LangGraph StateGraph
+│   ├── requirements.txt                # Production dependency specification
+│   └── data/
+│       └── custom_cases.parquet        # Persistent store for user-created custom cases
+│
+├── backend/
+│   ├── paddleocr_engine.py             # RapidOCR/PaddleOCR ONNX engine wrapper
+│   ├── ocr_engine.py                   # Bounding box & token data models
+│   └── venv/                           # Production Python Virtual Environment
+│
+├── okf-benchmark/
+│   ├── ocr_bridge.py                   # 2-Pass OCR Scoped Identifier Recovery
+│   └── engine_source/
+│       ├── config.yaml                 # Engine hyperparameters, thresholds & weights
+│       ├── reports/
+│       │   ├── canonical_cases_2021_2026.parquet # Master dataset (12,688 SC cases)
+│       │   └── 150_doc_benchmark_report.md      # Multi-year evaluation benchmark report
+│       └── src/
+│           ├── ingest/
+│           │   ├── build_canonical.py           # Base canonical dataset builder
+│           │   └── incremental_year_ingest.py   # Multi-year AWS S3 streaming ingester
+│           ├── match/
+│           │   ├── exact.py                     # ExactMatcher hash lookup
+│           │   ├── fuzzy.py                     # RapidFuzz token matcher
+│           │   ├── semantic.py                  # FAISS + BM25 hybrid searcher
+│           │   └── pipeline.py                  # 3-tier cascade orchestration pipeline
+│           └── testset/
+│               └── run_150_doc_benchmark.py     # 150-doc evaluation test harness
+│
+├── run_app.sh                          # Master one-click application launcher
+├── run_yearly_ingest.sh                # CLI for year-by-year incremental ingestion
+├── setup_and_run.sh                    # Initial setup & dependency bootstrapper
+└── ARCHITECTURE.md                     # System blueprint & deployment manual
 ```
 
-### Data Schema (`canonical_cases.parquet`)
-```sql
-CREATE TABLE canonical_cases (
-    cnr VARCHAR(16) PRIMARY KEY,
-    case_number VARCHAR(64),
-    case_id VARCHAR(64),
-    nc_display VARCHAR(64),
-    court_name VARCHAR(128),
-    bench VARCHAR(256),
-    year INTEGER,
-    petitioner TEXT,
-    respondent TEXT,
-    parties TEXT,
-    judge TEXT,
-    decision_date VARCHAR(32),
-    disposal_nature VARCHAR(64),
-    extracted_text_snippet TEXT,
-    chunk_opening TEXT,
-    chunk_holding TEXT,
-    chunk_body TEXT,
-    is_custom BOOLEAN DEFAULT FALSE
-);
-```
+---
+
+### 5.2. Parquet Schema Specification (`canonical_cases.parquet`)
+
+| Column Name | SQL Type | Nullable | Description |
+| :--- | :--- | :---: | :--- |
+| `cnr` | `VARCHAR(16)` | Yes | Unique 16-char CNR case identifier (e.g., `ESCR010001152021`) |
+| `case_number` | `VARCHAR(64)` | No | Normalized neutral citation or case ID (e.g., `2021INSC115`) |
+| `case_id` | `VARCHAR(64)` | No | Unique internal identifier key |
+| `nc_display` | `VARCHAR(64)` | Yes | Formatted Neutral Citation (e.g., `2021 INSC 115`) |
+| `court_name` | `VARCHAR(128)` | No | Court name (Default: `Supreme Court of India`) |
+| `bench` | `VARCHAR(256)` | Yes | Presiding Judges / Bench designation |
+| `year` | `INTEGER` | No | Year of judgment adjudication (1950–2025) |
+| `petitioner` | `TEXT` | Yes | Cleaned Petitioner / Appellant entity name |
+| `respondent` | `TEXT` | Yes | Cleaned Respondent / Defendant entity name |
+| `parties` | `TEXT` | No | Full case title string (e.g., `PETITIONER v. RESPONDENT`) |
+| `judge` | `TEXT` | Yes | Bench composition |
+| `decision_date` | `VARCHAR(32)` | Yes | Formatted decision date (`YYYY-MM-DD` or `DD-MM-YYYY`) |
+| `disposal_nature` | `VARCHAR(64)` | Yes | Case outcome (`Appeal Allowed`, `Dismissed`, `Disposed`) |
+| `extracted_text_snippet` | `TEXT` | Yes | 600-character initial summary excerpt |
+| `chunk_opening` | `TEXT` | Yes | First 500 characters of facts & preliminary arguments |
+| `chunk_holding` | `TEXT` | Yes | Concluding 500 characters containing final order & ruling |
+| `chunk_body` | `TEXT` | Yes | Middle substantive legal text chunk (1,000 chars) |
+| `is_custom` | `BOOLEAN` | No | `False` for canonical SC cases, `True` for user-created cases |
 
 ---
 
 ## 6. Production Deployment Blueprint
 
-### 6.1. System Requirements & Hardware Sizing
+### 6.1. System Hardware Sizing & Specifications
 
-| Metric | Minimum (Evaluation) | Recommended (Production) |
-| :--- | :--- | :--- |
-| **CPU** | 4 Cores (x86_64 or ARM64) | 8–16 Cores |
-| **RAM** | 8 GB | 16–32 GB |
-| **Storage** | 10 GB SSD | 50 GB NVMe SSD |
-| **GPU** | Not required (CPU optimized) | Optional (NVIDIA T4 / A10G for accelerated OCR / Ollama) |
-| **OS** | Ubuntu 22.04 LTS / macOS 13+ | Ubuntu 22.04 / 24.04 LTS |
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           HARDWARE SIZING MATRIX                            │
+├───────────────────┬───────────────────────────┬─────────────────────────────┤
+│ Component         │ Minimum (Staging / Demo)  │ Recommended (Production)    │
+├───────────────────┼───────────────────────────┼─────────────────────────────┤
+│ CPU Cores         │ 4 vCPUs (x86_64 / ARM64)  │ 8–16 vCPUs                  │
+│ System Memory     │ 8 GB RAM                  │ 16–32 GB RAM                │
+│ Storage           │ 15 GB SSD                 │ 50 GB NVMe SSD              │
+│ Network           │ 100 Mbps                  │ 1 Gbps                      │
+│ GPU (Optional)    │ None (CPU Optimized)      │ 1x NVIDIA T4 / A10G (Ollama)│
+│ Operating System  │ Ubuntu 22.04 LTS / macOS  │ Ubuntu 22.04 / 24.04 LTS    │
+└───────────────────┴───────────────────────────┴─────────────────────────────┘
+```
 
 ---
 
-### 6.2. Bare-Metal / Virtual Machine Deployment
+### 6.2. Bare-Metal / Virtual Machine Production Deployment
 
-#### Step 1: Clone Repository & Prepare Environment
+#### Step 1: Clone Repository & Create Virtualenv
 ```bash
-git clone https://github.com/yashvvrn/legal-case-matcher-sc.git /opt/legal-case-matcher
-cd /opt/legal-case-matcher
+sudo mkdir -p /opt/legal-platform
+sudo chown -R $USER:$USER /opt/legal-platform
+git clone https://github.com/yashvvrn/legal-case-matcher-sc.git /opt/legal-platform
+cd /opt/legal-platform
 
-# Create virtual environment
+# Initialize Python 3.11 virtual environment
 python3 -m venv backend/venv
 source backend/venv/bin/activate
 
@@ -225,48 +301,54 @@ pip install --upgrade pip
 pip install -r legal_case_app/requirements.txt
 ```
 
-#### Step 2: Setup Local LLM Daemon (Ollama)
+#### Step 2: Install and Configure Ollama LLM Service
 ```bash
 # Install Ollama
 curl -fsSL https://ollama.com/install.sh | sh
 
-# Start Ollama service and pull model
-systemctl enable --now ollama
+# Enable and start Ollama service
+sudo systemctl enable --now ollama
+
+# Pull Gemma 3 1B model
 ollama pull gemma3:1b
 ```
 
-#### Step 3: Configure Systemd Services
+#### Step 3: Configure Systemd Application Daemon
+Create `/etc/systemd/system/legal-platform.service`:
 
-**1. Streamlit Application Service (`/etc/systemd/system/legal-case-app.service`)**:
 ```ini
 [Unit]
-Description=Legal Case Matcher & Custom Case Engine
+Description=Legal Case Platform (LangGraph Engine & Streamlit UI)
 After=network.target ollama.service
+Wants=ollama.service
 
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=/opt/legal-case-matcher
-ExecStart=/opt/legal-case-matcher/backend/venv/bin/streamlit run legal_case_app/app.py \
+Group=www-data
+WorkingDirectory=/opt/legal-platform
+ExecStart=/opt/legal-platform/backend/venv/bin/streamlit run legal_case_app/app.py \
     --server.port 8501 \
     --server.address 0.0.0.0 \
     --server.headless true \
-    --browser.serverAddress 0.0.0.0 \
     --server.enableCORS false \
-    --server.enableXsrfProtection true
+    --server.enableXsrfProtection true \
+    --browser.serverAddress 0.0.0.0
 Restart=always
 RestartSec=5
-Environment=PYTHONPATH=/opt/legal-case-matcher:/opt/legal-case-matcher/backend:/opt/legal-case-matcher/okf-benchmark/engine_source
+LimitNOFILE=65535
+Environment=PYTHONPATH=/opt/legal-platform:/opt/legal-platform/backend:/opt/legal-platform/okf-benchmark/engine_source
+Environment=TOKENIZERS_PARALLELISM=false
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-**2. Enable and Start Application Service**:
 ```bash
+# Reload and start service
 sudo systemctl daemon-reload
-sudo systemctl enable --now legal-case-app.service
-sudo systemctl status legal-case-app.service
+sudo systemctl enable --now legal-platform.service
+sudo systemctl status legal-platform.service
 ```
 
 ---
@@ -275,15 +357,23 @@ sudo systemctl status legal-case-app.service
 
 #### `Dockerfile`
 ```dockerfile
+# Multi-stage production build
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+COPY legal_case_app/requirements.txt .
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+    && pip install --no-cache-dir --user -r requirements.txt
+
 FROM python:3.11-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH="/app:/app/backend:/app/okf-benchmark/engine_source"
+    PYTHONPATH="/app:/app/backend:/app/okf-benchmark/engine_source" \
+    PATH="/root/.local/bin:$PATH"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
     curl \
     libgl1 \
     libglib2.0-0 \
@@ -291,10 +381,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-
-COPY legal_case_app/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
+COPY --from=builder /root/.local /root/.local
 COPY . .
 
 EXPOSE 8501
@@ -312,18 +399,18 @@ version: '3.8'
 services:
   ollama:
     image: ollama/ollama:latest
-    container_name: legal_ollama
+    container_name: legal_ollama_service
     restart: unless-stopped
     ports:
       - "11434:11434"
     volumes:
-      - ollama_data:/root/.ollama
+      - ollama_storage:/root/.ollama
 
   legal_app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: legal_case_matcher
+    container_name: legal_case_platform
     restart: unless-stopped
     ports:
       - "8501:8501"
@@ -336,31 +423,45 @@ services:
       - ollama
 
 volumes:
-  ollama_data:
+  ollama_storage:
+```
+
+```bash
+# Launch multi-container deployment
+docker compose up -d --build
+# Pull Gemma model inside Ollama container
+docker compose exec ollama ollama pull gemma3:1b
 ```
 
 ---
 
-### 6.4. NGINX Reverse Proxy & SSL Termination
+### 6.4. NGINX Reverse Proxy with SSL Termination
 
 ```nginx
+upstream streamlit_backend {
+    server 127.0.0.1:8501;
+    keepalive 64;
+}
+
 server {
     listen 80;
-    server_name legal-matcher.yourdomain.com;
+    server_name legal-platform.yourdomain.com;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name legal-matcher.yourdomain.com;
+    server_name legal-platform.yourdomain.com;
 
-    ssl_certificate /etc/letsencrypt/live/legal-matcher.yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/legal-matcher.yourdomain.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/legal-platform.yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/legal-platform.yourdomain.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
 
-    client_max_body_size 50M;
+    client_max_body_size 100M;
 
     location / {
-        proxy_pass http://127.0.0.1:8501;
+        proxy_pass http://streamlit_backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -369,34 +470,84 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400;
+        proxy_buffering off;
+    }
+
+    location /_stcore/stream {
+        proxy_pass http://streamlit_backend/_stcore/stream;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 86400;
     }
 }
 ```
 
 ---
 
-## 7. Security, Privacy & Air-Gapped Operation
+## 7. Operational Runbooks & Administration
 
-1. **Zero External API Dependency**: Embeddings (`all-MiniLM-L6-v2`), OCR (`RapidOCR ONNX`), and LLM generation (`Gemma 3 1B via Ollama`) run 100% locally on-premises.
-2. **Air-Gapped Compliant**: No uploaded document or proprietary legal query leaves the local instance or private network.
-3. **Data Sanitization**: OCR output is cleaned of illegal unicode characters, null bytes, and non-printable control sequences prior to state insertion.
-4. **Parquet Integrity**: Atomically writes custom case records to prevent corruption under concurrent transactions.
+### 7.1. Ingesting Additional Historical Judgments
+To ingest additional decades from the AWS Open Data Registry:
+```bash
+# Ingest 2000 through 2009
+./run_yearly_ingest.sh $(seq 2000 2009)
+
+# Ingest all historical cases from 1950 to 1999
+./run_yearly_ingest.sh $(seq 1950 1999)
+```
+
+### 7.2. Backup and Disaster Recovery
+```bash
+# Backup master Parquet dataset and user custom cases
+tar -czvf legal_backup_$(date +%F).tar.gz \
+    okf-benchmark/engine_source/reports/canonical_cases_2021_2026.parquet \
+    legal_case_app/data/custom_cases.parquet
+
+# Restore from backup
+tar -xzvf legal_backup_YYYY-MM-DD.tar.gz
+```
+
+### 7.3. Health Checks & Diagnostics
+- **App Health**: `curl -f http://localhost:8501/_stcore/health` (Returns `ok`)
+- **Ollama LLM Status**: `curl http://localhost:11434/api/tags`
+- **LangGraph Verification**:
+  ```bash
+  backend/venv/bin/python -u -c "
+  import sys; sys.path.insert(0, 'legal_case_app');
+  from engine import PipelineEngine, create_langgraph_pipeline;
+  engine = PipelineEngine();
+  graph = create_langgraph_pipeline(engine);
+  print('LangGraph Health: OK, Total indexed cases:', len(engine.df_master));
+  "
+  ```
 
 ---
 
-## 8. Scalability & Horizontal Expansion Roadmap
+## 8. Security & Air-Gapped Compliance
+
+1. **Complete On-Premises Privacy**: OCR, dense embedding generation, vector searches, and LLM text generation occur entirely on the local machine without making outbound network requests.
+2. **Deterministic Fallbacks**: If external daemons become unresponsive, the pipeline falls back to rule-based structured templates, ensuring 100% uptime.
+3. **Data Hygiene**: Sanitizes text buffers against byte injections, non-printable characters, and malformed unicode.
+4. **Input Size Limits**: Enforces 100MB max payload limits at the NGINX and Streamlit layers to prevent memory exhaustion attacks.
+
+---
+
+## 9. Scalability Roadmap
 
 ```mermaid
 graph LR
-    subgraph Multi_Worker_Scaling ["Distributed Production Evolution"]
-        LoadBalancer["NGINX / ALB"] --> Worker1["Worker Node 1 (FastAPI)"]
-        LoadBalancer --> Worker2["Worker Node 2 (FastAPI)"]
-        Worker1 & Worker2 --> VectorStore[("Qdrant / Milvus Cluster")]
-        Worker1 & Worker2 --> TaskQueue["Celery + Redis Queue"]
-        TaskQueue --> GPU_Workers["GPU Workers (Ollama / vLLM Cluster)"]
+    subgraph Distributed_Evolution ["Enterprise Scale Architecture"]
+        LB["Load Balancer / NGINX"] --> API1["FastAPI Worker 1"]
+        LB --> API2["FastAPI Worker 2"]
+        API1 & API2 --> VectorCluster[("Qdrant / Milvus Cluster\n(Distributed Embeddings)")]
+        API1 & API2 --> RedisQueue["Redis Message Broker"]
+        RedisQueue --> CeleryWorkers["Celery Background OCR Workers"]
+        API1 & API2 --> LLMPool["vLLM / Ollama GPU Cluster"]
     end
 ```
 
-1. **Vector Layer Transition**: Upgrade local FAISS CPU index to **Qdrant** or **Milvus** cluster for scaling beyond $10^7$ document chunks.
-2. **REST API Interface**: Decouple `engine.py` into a high-concurrency FastAPI service with worker pooling (`uvicorn -w 4`).
-3. **Distributed Async Queue**: Delegate heavy scanned PDF OCR tasks to Celery/Redis background workers.
+1. **Distributed Vector Cluster**: Swap local FAISS CPU with **Qdrant** or **Milvus** cluster for supporting $10^7+$ documents.
+2. **Microservices Decomposition**: Expose `engine.py` as an asynchronous FastAPI microservice (`POST /api/v1/match`, `POST /api/v1/custom-case`).
+3. **GPU Batching**: Deploy `vLLM` or multi-GPU Ollama instances to serve hundreds of concurrent legal summarization requests per second.
